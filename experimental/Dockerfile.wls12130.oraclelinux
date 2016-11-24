@@ -1,4 +1,4 @@
-FROM centos:centos7
+FROM docker.io/oraclelinux:7
 MAINTAINER tangfeixiong <tangfx128@gmail.com>
 # Inspired by: Anastas Dancha <anapsix@random.io>, playniuniu@gmail.com, 
 # and http://download.oracle.com/otn/nt/middleware/12c/wls/1213/README_WIN_UP3.txt
@@ -22,18 +22,16 @@ ENV JAVA_HOME=/opt/jre \
     CONFIG_JVM_ARGS="-Dweblogic.security.SSL.ignoreHostnameVerification=true" \
     PATH=$PATH:/opt/jre/bin:$MW_HOME/oracle_common/common/bin:$WL_HOME/common/bin:${DOMAIN_HOME}/bin \
     USER_MEM_ARGS="-Djava.security.egd=file:/dev/./urandom" \
-    DEBUG_PORT="8453" \
-    JAVA_OPTIONS=-Dweblogic.management.GenerateDefaultConfig=true -Dweblogic.management.username=${admin_username:-weblogic} -Dweblogic.management.password=${admin_password:-weblogic1234%^&*} -Dweblogic.Domain=${domain_name:-mydomain} -Dweblogic.Name=AdminServer -Dweblogic.ListenPort=8001
+    DEBUG_PORT="8453"
 
-RUN if [[ -f /tmp/build/download/unzip-6.0-15.el7.x86_64.rpm ]] ; \
-    then \
+RUN if [[ -f /tmp/build/download/unzip-6.0-15.el7.x86_64.rpm ]] ; then \
         rpm -ivh /tmp/build/download/unzip-6.0-15.el7.x86_64.rpm ; \
     else \
-        INSTALL_PKGS="curl tar unzip" \
+        INSTALL_PKGS="curl tar unzip wget" \
         && yum install -y $INSTALL_PKGS \
-        && rpm -V $INSTALL_PKGS ; \
+        && rpm -V $INSTALL_PKGS \
+        && yum clean all ; \
     fi \
-  && yum clean all \
   && /tmp/build/download/download-oracle-java.sh \
   && mkdir -p /opt/jre \
   && tar -C /opt/jre --strip-components=1 -zxf /tmp/build/download/java.tar.gz \
@@ -56,24 +54,37 @@ RUN if [[ -f /tmp/build/download/unzip-6.0-15.el7.x86_64.rpm ]] ; \
   && rm -rf $wls_tmp /tmp/build \
   && REMOVE_PKGS="unzip wget" \
   && yum erase -y $REMOVE_PKGS \
-  && JAVA_STUFFS=" \
+  && JAVA_STUFF=" \
+        db \
+        include \
+        jre/bin/{jjs,keytool,orbd,pack200,policytool,rmid,rmiregistry,servertool,tnameserv,unpack200} \
+        jre/lib/ext/{jfxrt.jar,nashorn.jar} \
+        jre/lib/{fontconfig.RedHat.*,fontconfig.SuSE.*,fontconfig.Turbo.*} \
+        jre/{README,THIRDPARTYLICENSEREADME.txt, Welcome.html} \
+        lib/{javaws.jar,deploy*,desktop,*javafx*,*jfx*,oblique-fonts,plugin.jar} \
+        man \
         plugin \
-        bin/{javaws,jjs,keytool,orbd,pack200,policytool,rmid,rmiregistry, \
-            servertool,tnameserv,unpack200} \
-        lib/{javaws.jar,deploy*,desktop,*javafx*,*jfx*, \
-            oblique-fonts,plugin.jar} \
-        lib/ext/{jfxrt.jar,nashorn.jar} \
+        README.html \
+        release \
+        THIRDPARTYLICENSEREADME.txt \
   " \
-  && for i in $JAVA_STUFFS; do rm -rf $JAVA_HOME/$i; done \
-  && WLS_STUFFS=" \
-    coherence/bin/{*.cmd,optimize.reg} \
+  && for i in $JAVA_STUFF; do rm -rf $JAVA_HOME/$i; done \
+  && WLS_STUFF=" \
+    coherence/bin/{*.cmd,optimize.reg,readme} \
     oracle_common/bin/*.bat \
     oracle_common/common/bin/*.cmd \
-    oui \
+    oracle_common/common/modules/datadirect/*.dll \
+    oracle_common/common/modules/mysql-connector-java-commercial-5.1.22/{docs,CHANGES,*README*} \
+    oracle_common/common/modules/oracle.fmwconfig.common.wls.help/{wl???_de.*,wl???_es.*,wl???_fr.*,wl???_it.*,wl???_ja.*,wl???_ko.*,wl???_pt_BR.*,wl???_zh_TW.*} \
+    oracle_common/common/modules/org.apache.ant_1.9.2/bin/{*.bat,*.cmd} \
+    oracle_common/common/modules/org.apache.ant_1.9.2/{manual,INSTALL,README,WHATSNEW} \ 
+    oracle_common/common/modules/org.apache.maven_3.0.5/bin/*.bat \
     wlserver/common/bin/*.cmd \
     wlserver/server/bin/{international,*.exe,*.dll,*.lib,*.cmd} \
+    wlserver/server/{db2,informix,sybase} \
     wlserver/server/include/{aixppc*,hp-ux,lnx_s*,lnxi*,win32} \
     wlserver/server/include/platform/{aixppc*,hp-ux,lnx_s*,lnxi*,win32} \
+    wlserver/server/lib/{weblogic-de.*,weblogic-es.*,weblogic-fr.*,weblogic-it.*,weblogic-js.*,weblogic-ko.*,weblogic-pt_BR.*,weblogic-zh_TW.*,wlw-langx-jx.*,wlw-langx-ko.*,wlw-langx-zh_TW.*} \
     wlserver/server/locale/C/{aix-*,hpux-*,linux-i*,linux-s*,solaris-*,win*} \
     wlserver/server/native/linux/i686 \
     wlserver/server/native/win \
@@ -82,7 +93,7 @@ RUN if [[ -f /tmp/build/download/unzip-6.0-15.el7.x86_64.rpm ]] ; \
     configure.cmd \
     README_WIN \
   " \
-  && for i in $WLS_STUFFS; do rm -rf $MW_HOME/$i; done 
+  && for i in $WLS_STUFF; do rm -rf $MW_HOME/$i; done 
 
 # VOLUME /tmp/user_projects/domains/$domain_name
 
