@@ -1,0 +1,92 @@
+FROM centos:centos7
+MAINTAINER tangfeixiong <tangfx128@gmail.com>
+# Inspired by: Anastas Dancha <anapsix@random.io>, playniuniu@gmail.com, 
+# and http://download.oracle.com/otn/nt/middleware/12c/wls/1213/README_WIN_UP3.txt
+
+ARG java_url="http://download.oracle.com/otn-pub/java/jdk/8u112-b15/server-jre-8u112-linux-x64.tar.gz"
+ARG domain_name
+ARG admin_username
+ARG admin_password
+
+COPY / /tmp/build/
+
+ENV JAVA_HOME=/opt/jre \
+    MW_HOME=/root/fmw \
+    WL_HOME=/root/fmw/wlserver \
+    DOMIAN_NAME=${domain_name:-mydomain} \
+    DOMAIN_HOME=/root/user_projects/domains/${domain_name:-mydomain} \
+    ADMIN_PORT="8001" \
+    ADMIN_HOST="wlsadmin" \
+    NM_PORT="5556" \
+    MS_PORT="7001" \
+    CONFIG_JVM_ARGS="-Dweblogic.security.SSL.ignoreHostnameVerification=true" \
+    PATH=$PATH:/opt/jre/bin:$MW_HOME/oracle_common/common/bin:$WL_HOME/common/bin:${DOMAIN_HOME}/bin \
+    USER_MEM_ARGS="-Djava.security.egd=file:/dev/./urandom" \
+    DEBUG_PORT="8453" \
+    JAVA_OPTIONS=-Dweblogic.management.GenerateDefaultConfig=true -Dweblogic.management.username=${admin_username:-weblogic} -Dweblogic.management.password=${admin_password:-weblogic1234%^&*} -Dweblogic.Domain=${domain_name:-mydomain} -Dweblogic.Name=AdminServer -Dweblogic.ListenPort=8001
+
+RUN if [[ -f /tmp/build/download/unzip-6.0-15.el7.x86_64.rpm ]] ; \
+    then \
+        rpm -ivh /tmp/build/download/unzip-6.0-15.el7.x86_64.rpm ; \
+    else \
+        INSTALL_PKGS="curl tar unzip" \
+        && yum install -y $INSTALL_PKGS \
+        && rpm -V $INSTALL_PKGS ; \
+    fi \
+  && yum clean all \
+  && /tmp/build/download/download-oracle-java.sh \
+  && mkdir -p /opt/jre \
+  && tar -C /opt/jre --strip-components=1 -zxf /tmp/build/download/java.tar.gz \
+  && wls_tmp=$(mktemp --dry-run) \
+  && unzip -qd $wls_tmp /tmp/build/download/wls.zip \
+  && wls_path=$(basename  $(ls -d $wls_tmp/wls*)) \
+  && mv $wls_tmp/$wls_path $MW_HOME \
+  && . $MW_HOME/configure.sh -silent \
+  && . $MW_HOME/wlserver/server/bin/setWLSEnv.sh \
+  && for i in $(ls /tmp/build/container-scripts/{*.py,*.sh}); do sed -i "s%/u01/oracle/%$MW_HOME/%g" $i; done \ 
+  && mv /tmp/build/container-scripts/* $MW_HOME \
+  && export PATH=$PATH:/opt/jre/bin:$MW_HOME/oracle_common/common/bin:$WL_HOME/common/bin:${DOMAIN_HOME}/bin:$DOMAIN_HOME/bin \
+  && ADMIN_PASSWORD=${admin_password:-weblogic1234%^&*} \
+        $MW_HOME/wlst $MW_HOME/create-wls-domain.py \
+  && mkdir -p $DOMAIN_HOME/servers/AdminServer/security \
+  && echo -e "username=${admin_username:-weblogic}\npassword=${admin_password:-weblogic1234%^&*}" | tee $DOMAIN_HOME/servers/AdminServer/security/boot.properties \
+  && echo -e "\n. $DOMAIN_HOME/bin/setDomainEnv.sh\nexport PATH=$PATH:$DOMAIN_HOME/bin" | tee -a /root/.bashrc \
+  && cp $MW_HOME/commEnv.sh $WL_HOME/common/bin/commEnv.sh \
+  && rm $MW_HOME/create-wls-domain.py $MW_HOME/jaxrs2-template.jar \
+  && rm -rf $wls_tmp /tmp/build \
+  && REMOVE_PKGS="unzip wget" \
+  && yum erase -y $REMOVE_PKGS \
+  && JAVA_STUFFS=" \
+        plugin \
+        bin/{javaws,jjs,keytool,orbd,pack200,policytool,rmid,rmiregistry, \
+            servertool,tnameserv,unpack200} \
+        lib/{javaws.jar,deploy*,desktop,*javafx*,*jfx*, \
+            oblique-fonts,plugin.jar} \
+        lib/ext/{jfxrt.jar,nashorn.jar} \
+  " \
+  && for i in $JAVA_STUFFS; do rm -rf $JAVA_HOME/$i; done \
+  && WLS_STUFFS=" \
+    coherence/bin/{*.cmd,optimize.reg} \
+    oracle_common/bin/*.bat \
+    oracle_common/common/bin/*.cmd \
+    oui \
+    wlserver/common/bin/*.cmd \
+    wlserver/server/bin/{international,*.exe,*.dll,*.lib,*.cmd} \
+    wlserver/server/include/{aixppc*,hp-ux,lnx_s*,lnxi*,win32} \
+    wlserver/server/include/platform/{aixppc*,hp-ux,lnx_s*,lnxi*,win32} \
+    wlserver/server/locale/C/{aix-*,hpux-*,linux-i*,linux-s*,solaris-*,win*} \
+    wlserver/server/native/linux/i686 \
+    wlserver/server/native/win \
+    wlserver/sip/server/native/linux/i686 \
+    wlserver/sip/server/native/solaris \
+    configure \
+    README_WIN \
+  " \
+  && for i in $WLS_STUFFS; do rm -rf $MW_HOME/$i; done 
+
+# VOLUME /tmp/user_projects/domains/$domain_name
+
+EXPOSE $NM_PORT $ADMIN_PORT $MS_PORT $DEBUG_PORT
+
+WORKDIR $DOMAIN_HOME
+CMD ["startWebLogic.sh"]
