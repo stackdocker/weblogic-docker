@@ -1,0 +1,30 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  labels:
+    run: weblogic1213
+  name: weblogic1213
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      run: weblogic1213
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        run: weblogic1213
+    spec:
+      containers:
+      - image: 10.64.33.81:5000/weblogic:domain_12.1.3-serverjre7-ol7
+        imagePullPolicy: IfNotPresent
+        name: weblogic1213
+        resources: {}
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      securityContext: {}
