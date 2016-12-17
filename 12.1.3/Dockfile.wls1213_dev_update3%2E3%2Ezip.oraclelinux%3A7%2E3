@@ -35,6 +35,21 @@ ENV JAVA_HOME="/opt/java" \
 ### WORKDIR /tmp
 
 RUN temp_dir=/tmp/build \
+    && install_RPMs=" \
+        unzip-6.0-16.el7.x86_64.rpm \
+        wget-1.14-13.el7.x86_64.rpm \
+    " \
+    && for i in $install_RPMs; do \
+        rpm -Uvh ${oraclelinux_rpm_url//%/%25}/$i; \
+    done \
+    && install_PKGs=" \
+        unzip \
+        wget \
+    " \
+    ### yum install -y $install_PKGs 
+    ### rpm -V $install_PKGs 
+    ### yum clean all 
+# Install Oracle Server JRE binaries
     && mkdir -p $JAVA_HOME \
     && curl -jkSL ${curl_java_opt:-''} \
         ${oracle_java_url//%/%25} \
@@ -87,16 +102,7 @@ RUN temp_dir=/tmp/build \
     && for i in $javaSlim; do \
         rm -rf $JAVA_HOME/$i; \
     done \
-    && install_RPMs=" \
-        unzip-6.0-16.el7.x86_64.rpm \
-    " \
-    && for i in $install_RPMs; do \
-        rpm -Uvh ${oraclelinux_rpm_url//%/%25}/$i; \
-    done \
-    && install_PKGs="unzip" \
-    ### yum install -y $install_PKGs 
-    ### rpm -V $install_PKGs 
-    ### yum clean all 
+# Install Oracle Weblogic binaries
     && mkdir -p $temp_dir/download \
     && curl -jkSL ${oracle_weblogic_url//%/%25} -o $temp_dir/download/wls.zip \
     && wls_tmpdir=$(mktemp --dry-run) \
@@ -190,8 +196,13 @@ RUN temp_dir=/tmp/build \
     && echo -e "\n. $DOMAIN_HOME/bin/setDomainEnv.sh\n\nexport PATH=$PATH" | tee -a $HOME/.bashrc \
     && cp $MW_HOME/commEnv.sh $WL_HOME/common/bin/commEnv.sh \
     && rm $MW_HOME/create-wls-domain.py $MW_HOME/jaxrs2-template.jar \
+# Finally
     && yum remove -y $install_PKGs \
-    && ( [ -f $temp_dir/sample.war ] && mv $temp_dir/sample.war $DOMAIN_HOME/autodeploy ) \
+    && mkdir -p $DOMAIN_HOME/app \
+    && ( [ -f $temp_dir/sample.war ] \
+        && mv $temp_dir/sample.war $DOMAIN_HOME/app ) \
+    && ( [ -f $temp_dir/example.tar ] \
+        && mv $temp_dir/example.tar $DOMAIN_HOME/app ) \
     && rm -rf $temp_dir
 
 ENV JAVA_OPTIONS "-Xms512m -Xmx512m -XX:PermSize=64m -XX:MaxPermSize=256m" 

@@ -15,7 +15,7 @@ if [ -e /bin/docker -o -e /usr/bin/docker -o -e /usr/local/bin/docker ]; then
 
 install_pkg="
     unzip \
-	bsdtar \
+    glibc-common \
 "
 
 docker run -t --rm -v $download_dir:/tmp/download oraclelinux:7.3 \
