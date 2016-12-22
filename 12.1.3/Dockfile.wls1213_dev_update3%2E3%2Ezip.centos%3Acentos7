@@ -1,4 +1,4 @@
-FROM docker.io/oraclelinux:7.3
+FROM docker.io/centos:centos7
 MAINTAINER tangfeixiong <tangfx128@gmail.com>
 # Inspired by: Anastas Dancha <anapsix@random.io>, playniuniu@gmail.com, 
 # and [Oracle Github-ed Java, Weblogic guide](https://github.com/oracle/docker-images)
@@ -9,8 +9,8 @@ MAINTAINER tangfeixiong <tangfx128@gmail.com>
 ARG java_pkg="http://172.17.4.1:48080/99-mirror/http%3A%2F%2Fdownload.oracle.com/otn-pub%2Fjava%2Fjdk%2F7u80-b15/server-jre-7u80-linux-x64.tar.gz"
 # Oracle Fusion Middleware Weblogic "wls1213_dev_update3.zip"
 ARG fmw_pkg="http://172.17.4.1:48080/99-mirror/http%3A%2F%2Fdownload.oracle.com/otn%2Fnt%2Fmiddleware%2F12c%2Fwls%2F1213/wls1213_dev_update3.zip"
-# ARG rpm_pkg, a local fileserver destinations which packages are download by "download-oraclelinux7-rpm.sh"
-ARG rpm_pkg="http://172.17.4.1:48080/99-mirror/%2E%2Eworkspace%2Fsrc%2Fgithub.com%2Fstackdocker%2Fweblogic-docker%2Fdownload%2Foraclelinux7%2Frpm"
+# ARG rpm_pkg, a local fileserver destinations which packages are download by "download-centos7-rpm.sh"
+ARG rpm_pkg="http://172.17.4.1:48080/99-mirror/%2E%2Eworkspace%2Fsrc%2Fgithub.com%2Fstackdocker%2Fweblogic-docker%2Fdownload%2Fcentos7%2Frpm"
 
 # weblogic domain name (default is "base_domain").
 ARG wls_domain_name
