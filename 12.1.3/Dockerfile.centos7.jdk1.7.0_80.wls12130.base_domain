@@ -1,0 +1,207 @@
+FROM docker.io/centos:centos7
+MAINTAINER tangfeixiong <tangfx128@gmail.com>
+# Inspired by: Anastas Dancha <anapsix@random.io> (https://github.com/oracle/docker-images)
+
+# weblogic domain name (default is "base_domain").
+ARG wls_domain_name
+# weblogic admin username (default is "weblogic").
+ARG wls_admin_username
+# weblogic admin password (default is "weblogic1234%^&*")
+ARG wls_admin_password
+# weblogic procution mode (default is "prod")
+# ARG wls_production_mode
+
+COPY download/jdk1.7.0_80/ /opt/java/
+COPY download/wls12130/ 12.1.3/container-scripts/ /u01/oracle/
+COPY 12.1.3/ /tmp/build/
+
+ENV JAVA_HOME="/opt/java" \
+    \
+    ORACLE_HOME="/u01/oracle" \
+    MW_HOME="/u01/oracle" \
+    WL_HOME="/u01/oracle/wlserver" \
+    USER_MEM_ARGS="-Djava.security.egd=file:/dev/./urandom" \
+    \
+    DOMAIN_NAME="${wls_domain_name:-base_domain}" \
+    DOMAIN_HOME="/u01/oracle/user_projects/domains/${wls_domain_name:-base_domain}" \
+    ADMIN_PORT="8001" \
+    ADMIN_HOST="wlsadmin" \
+    NM_PORT="5556" \
+    MS_PORT="7001" \
+    CONFIG_JVM_ARGS="-Dweblogic.security.SSL.ignoreHostnameVerification=true" \
+    \
+    PATH=$PATH:/opt/java/bin:/u01/oracle/oracle_common/common/bin:/u01/oracle/wlserver/common/bin:/u01/oracle/user_projects/domains/${wls_domain_name:-base_domain}/bin:/u01/oracle
+# "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+RUN set -x \
+    && temp_dir=/tmp/build \
+# Install Oracle Server JRE package
+    && { \
+        [ -x $JAVA_HOME/bin/java ] \
+        && java -version \
+        || exit 1 ; \
+    } \
+    && javaSlim=" \
+        README.html \
+        release \
+        THIRDPARTYLICENSEREADME*.txt \
+        *src.zip \
+        db/3RDPARTY \
+        db/NOTICE \
+        db/README-JDK.html \
+        db/RELEASE-NOTES.html \
+        db/bin/*.bat \
+        ### db/lib/derbyLocale_de_DE.jar
+        ### db/lib/derbyLocale_es.jar
+        ### db/lib/derbyLocale_fr.jar
+        ### db/lib/derbyLocale_hu.jar
+        ### db/lib/derbyLocale_it.jar
+        ### db/lib/derbyLocale_ja_JP.jar
+        ### db/lib/derbyLocale_ko_KR.jar
+        ### db/lib/derbyLocale_pl.jar
+        ### db/lib/derbyLocale_pt_BR.jar
+        ### db/lib/derbyLocale_ru.jar
+        ### db/lib/derbyLocale_zh_TW.jar
+        jre/README \
+        jre/THIRDPARTYLICENSEREADME*.txt \
+        jre/Welcome.html \
+        jre/plugin \
+        jre/bin/javaws \
+        jre/bin/jjs \
+        jre/bin/keytool \
+        jre/bin/orbd \
+        jre/bin/pack200 \
+        jre/bin/policytool \
+        jre/bin/rmid \
+        jre/bin/rmiregistry \
+        jre/bin/servertool \
+        jre/bin/tnameserv \
+        jre/bin/unpack200 \
+        jre/lib/javaws.jar \
+        jre/lib/deploy* \
+        jre/lib/desktop \
+        jre/lib/*javafx* \
+        jre/lib/*jfx* \
+        jre/lib/amd64/libdecora_sse.so \
+        jre/lib/amd64/libprism_*.so \
+        jre/lib/amd64/libfxplugins.so \
+        jre/lib/amd64/libglass.so \
+        jre/lib/amd64/libgstreamer-lite.so \
+        jre/lib/amd64/libjavafx*.so \
+        jre/lib/amd64/libjfx*.so \
+        jre/lib/ext/jfxrt.jar \
+        jre/lib/nashorn.jar \
+        jre/lib/oblique-fonts \
+        jre/lib/plugin.jar \
+        lib/*javafx* \
+        lib/missioncontrol \
+        lib/visualvm \
+        man/ja \
+        man/ja_JP.UTF-8 \
+    " \
+    && for i in $javaSlim; do \
+        rm -rf $JAVA_HOME/$i; \
+    done \ 
+# Install Oracle Weblogic package
+    && chmod a+xr /u01 \
+    && useradd -b /u01 -d $ORACLE_HOME --no-create-home --user-group -s /bin/bash oracle \
+    && echo oracle:oracle | chpasswd \
+    && cd $ORACLE_HOME \
+    && sh configure.sh -silent \
+    && find $ORACLE_HOME -name "*.sh" -exec chmod a+x {} \; \
+    && ADMIN_PASSWORD=${wls_admin_password:-weblogic1234%^&*} $ORACLE_HOME/wlst $ORACLE_HOME/create-wls-domain.py \
+    && mkdir -p $DOMAIN_HOME/servers/AdminServer/security \
+    && echo -e "username=${wls_admin_username:-weblogic}\npassword=${wls_admin_password:-weblogic1234%^&*}" \
+        | tee $DOMAIN_HOME/servers/AdminServer/security/boot.properties \
+    && echo -e "\n. $DOMAIN_HOME/bin/setDomainEnv.sh\n\nexport PATH=$PATH" \
+        | tee $ORACLE_HOME/.bashrc \
+    && echo -e "\n. $DOMAIN_HOME/bin/setDomainEnv.sh\n\nexport PATH=$PATH" \
+        | tee -a $HOME/.bashrc \
+    && cp $MW_HOME/commEnv.sh $MW_HOME/wlserver/common/bin/commEnv.sh \
+    && chown oracle:oracle -R /u01 \
+    ### rm $MW_HOME/create-wls-domain.py $MW_HOME/jaxrs2-template.jar
+    && fmwSlim=" \
+        README_WIN* \
+        configure.cmd \
+        coherence/bin/*.cmd \
+        coherence/bin/optimize.reg \
+        coherence/bin/readme \
+        oracle_common/bin/*.bat \
+        oracle_common/common/bin/*.cmd \
+        oracle_common/common/modules/datadirect/*.dll \
+        oracle_common/common/modules/mysql-connector-java-commercial-5.1.22/docs \
+        oracle_common/common/modules/mysql-connector-java-commercial-5.1.22/CHANGES \
+        oracle_common/common/modules/mysql-connector-java-commercial-5.1.22/*README* \
+        oracle_common/common/modules/oracle.fmwconfig.common.wls.help/wl???_de.* \
+        oracle_common/common/modules/oracle.fmwconfig.common.wls.help/wl???_es.* \
+        oracle_common/common/modules/oracle.fmwconfig.common.wls.help/wl???_fr.* \
+        oracle_common/common/modules/oracle.fmwconfig.common.wls.help/wl???_it.* \
+        oracle_common/common/modules/oracle.fmwconfig.common.wls.help/wl???_ja.* \
+        oracle_common/common/modules/oracle.fmwconfig.common.wls.help/wl???_ko.* \
+        oracle_common/common/modules/oracle.fmwconfig.common.wls.help/wl???_pt_BR.* \
+        oracle_common/common/modules/oracle.fmwconfig.common.wls.help/wl???_zh_TW.* \
+        oracle_common/common/modules/org.apache.ant_1.9.2/bin/*.bat \
+        oracle_common/common/modules/org.apache.ant_1.9.2/bin/*.cmd \
+        oracle_common/common/modules/org.apache.ant_1.9.2/manual \
+        oracle_common/common/modules/org.apache.ant_1.9.2/INSTALL \
+        oracle_common/common/modules/org.apache.ant_1.9.2/README \
+        oracle_common/common/modules/org.apache.ant_1.9.2/WHATSNEW \ 
+        oracle_common/common/modules/org.apache.maven_3.0.5/bin/*.bat \
+        wlserver/common/bin/*.cmd \
+        wlserver/server/bin/international \
+        wlserver/server/bin/*.exe \
+        wlserver/server/bin/*.dll \
+        wlserver/server/bin/*.lib \
+        wlserver/server/bin/*.cmd \
+        ### wlserver/server/db2
+        ### wlserver/server/informix
+        ### wlserver/server/sybase
+        wlserver/server/include/aixppc* \
+        wlserver/server/include/hp-ux \
+        wlserver/server/include/lnx_s* \
+        wlserver/server/include/lnxi* \
+        wlserver/server/include/win32 \
+        wlserver/server/include/platform/aixppc* \
+        wlserver/server/include/platform/hp-ux \
+        wlserver/server/include/platform/lnx_s* \
+        wlserver/server/include/platform/lnxi* \
+        wlserver/server/include/platform/win32 \
+        wlserver/server/lib/weblogic-de.* \
+        wlserver/server/lib/weblogic-es.* \
+        wlserver/server/lib/weblogic-fr.* \
+        wlserver/server/lib/weblogic-it.* \
+        wlserver/server/lib/weblogic-js.* \
+        wlserver/server/lib/weblogic-ko.* \
+        wlserver/server/lib/weblogic-pt_BR.* \
+        wlserver/server/lib/weblogic-zh_TW.* \
+        wlserver/server/lib/wlw-langx-jx.* \
+        wlserver/server/lib/wlw-langx-ko.* \
+        wlserver/server/lib/wlw-langx-zh_TW.* \
+        wlserver/server/locale/C/aix-*,hpux-* \
+        wlserver/server/locale/C/linux-i* \
+        wlserver/server/locale/C/linux-s* \
+        wlserver/server/locale/C/solaris-* \
+        wlserver/server/locale/C/win* \
+        wlserver/server/native/linux/i686 \
+        wlserver/server/native/win \
+        wlserver/sip/server/native/linux/i686 \
+        wlserver/sip/server/native/solaris \
+    " \
+    && for i in $fmwSlim; \
+        do rm -rf $MW_HOME/$i; \
+    done \
+# Finally
+    && cd / \
+    ### install_PKGs="
+    ###    unzip
+    ### "
+    ### yum remove -y $install_PKGs
+    && rm -rf $temp_dir \
+    && /bin/true
+
+ENV JAVA_OPTIONS="$JAVA_OPTIONS -Xms512m -Xmx512m -XX:PermSize=128m -XX:MaxPermSize=512m"
+
+VOLUME ["/tmp/project"]
+
+EXPOSE $ADMIN_PORT $NM_PORT $MS_PORT
+CMD ["startWebLogic.sh"]

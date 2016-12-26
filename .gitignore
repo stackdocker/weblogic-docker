@@ -3,6 +3,9 @@
 **/*.zip
 
 **/*.rpm
+download/centos7
+download/opensuse13.2
+download/oraclelinux7
 
 **/*.ear
 **/*.war

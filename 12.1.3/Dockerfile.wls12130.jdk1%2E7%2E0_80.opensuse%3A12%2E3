@@ -1,0 +1,114 @@
+FROM docker.io/opensuse:13.2
+# FROM docker.io/centos:centos7
+# FROM docker.io/oraclelinux:7.3
+MAINTAINER tangfeixiong <tangfx128@gmail.com>
+# Inspired by: Anastas Dancha <anapsix@random.io>, https://github.com/oracle/docker-images
+
+# weblogic domain name (default is "base_domain").
+ARG wls_domain_name
+# weblogic admin username (default is "weblogic").
+ARG wls_admin_username
+# weblogic admin password (default is "weblogic1234%^&*")
+ARG wls_admin_password
+# weblogic procution mode (default is "dev")
+# ARG wls_production_mode
+
+# Java download location (download/jdk1.7.0_80/)
+# Oracle Fusion Middleware Weblogic 12.1.3 download location (download/wls12130/)
+COPY download/jdk1.7.0_80/ /opt/java/
+COPY download/wls12130/ container-scripts/ /u01/oracle/
+
+ENV JAVA_HOME="/opt/java" \
+    MW_HOME="/u01/oracle" \
+    ORACLE_HOME="/u01/oracle" \
+    WL_HOME="/u01/oracle/wlserver" \
+    DOMAIN_NAME="${wls_domain_name:-base_domain}" \
+    DOMAIN_HOME="/u01/oracle/user_projects/domains/${wls_domain_name:-base_domain}" \
+    ADMIN_PORT="8001" \
+    ADMIN_HOST="wlsadmin" \
+    NM_PORT="5556" \
+    MS_PORT="7001" \
+    CONFIG_JVM_ARGS="-Dweblogic.security.SSL.ignoreHostnameVerification=true" \
+    USER_MEM_ARGS="-Djava.security.egd=file:/dev/./urandom" \
+    PATH=$PATH:/opt/java/bin:/u01/oracle/oracle_common/common/bin:/u01/oracle/wlserver/common/bin:/u01/oracle/user_projects/domains/${wls_domain_name:-base_domain}/bin:/u01/oracle
+# "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+### ENV PRODUCTION_MODE="${wls_production_mode:-'dev'}"
+### ENV MEM_DEV_ARGS="-Xms256m -Xmx512m -XX:PermSize=64m -XX:MaxPermSize=256m"
+### ENV DEBUG_PORT="8453"
+### ENV DEBUG_FLAG="true"
+
+RUN set -x \
+    && temp_dir=/tmp/build \
+# Install Oracle Server JRE package
+    && java -version \
+# Install Oracle Weblogic package
+    && chmod a+xr /u01 \
+    && useradd -b /u01 -d $ORACLE_HOME --no-create-home -s /bin/bash oracle \
+    && echo oracle:oracle | chpasswd \
+    && cd $ORACLE_HOME \
+    && sh configure.sh -silent \
+    && find $ORACLE_HOME -name "*.sh" -exec chmod a+x {} \; \
+    && chown oracle:oracle -R /u01 \
+    ### . $MW_HOME/wlserver/server/bin/setWLSEnv.sh
+    ### for i in $(ls $temp_dir/container-scripts/{*.py,*.sh}); do 
+    ###    sed -i "s%/u01/oracle/%$MW_HOME/%g" $i; 
+    ### done 
+    && ADMIN_PASSWORD=${wls_admin_password:-weblogic1234%^&*} $ORACLE_HOME/wlst $ORACLE_HOME/create-wls-domain.py \
+    && mkdir -p $DOMAIN_HOME/servers/AdminServer/security \
+    && echo -e "username=${wls_admin_username:-weblogic}\npassword=${wls_admin_password:-weblogic1234%^&*}" \
+        | tee $DOMAIN_HOME/servers/AdminServer/security/boot.properties \
+    && echo -e "\n. $DOMAIN_HOME/bin/setDomainEnv.sh\n\nexport PATH=$PATH" \
+        | tee -a $ORACLE_HOME/.bashrc \
+    && echo -e "\n. $DOMAIN_HOME/bin/setDomainEnv.sh\n\nexport PATH=$PATH" \
+        | tee -a $HOME/.bashrc \
+    && cp $ORACLE_HOME/commEnv.sh $MW_HOME/wlserver/common/bin/commEnv.sh \
+    && rm $ORACLE_HOME/create-wls-domain.py $ORACLE_HOME/jaxrs2-template.jar \
+
+# install locale RPM package
+    && install_PKGs=" \
+        ### unzip
+        ### bsdtar
+        glibc-common \
+    " \
+    ### yum install -y $install_PKGs 
+    ### rpm -V $install_PKGs 
+    ### yum clean all 
+    && install_RPMs=" \
+glibc-2.17-157.el7_3.1.x86_64.rpm \
+glibc-common-2.17-157.el7_3.1.x86_64.rpm \
+### bsdtar-3.1.2-10.el7_2.x86_64.rpm
+### libarchive-3.1.2-10.el7_2.x86_64.rpm
+### lzo-2.06-8.el7.x86_64.rpm
+### unzip-6.0-16.el7.x86_64.rpm
+    " \
+    && rpmPkgSrcDir="$(mktemp -d)" \
+    && cd "$rpmPkgSrcDir" \
+    && for i in $install_RPMs; do \
+        curl -jkSL "${rpm_pkg//%/%25}/${i##*( )}" -O; \
+    done \
+    && rpm -Uvh * \
+    && rm -rf "$rpmPkgSrcDir" \
+    && localedef -c -i zh_CN -f UTF-8 zh_CN.UTF-8 \
+    && rm -f /etc/localtime \
+    && ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
+# Finally
+    ### install_PKGs="
+    ###    unzip
+    ### "
+    ### yum remove -y $install_PKGs
+    && cd / \
+    && rm -rf $temp_dir
+
+### WORKDIR /u01/oracle
+
+# Default to UTF-8 file.encoding
+# ENV LANG zh_CN.UTF-8
+# ENV LC_ALL zh_CN.UTF-8
+
+ENV JAVA_OPTIONS="$JAVA_OPTIONS -Xms512m -Xmx512m -XX:PermSize=128m -XX:MaxPermSize=512m"
+
+### VOLUME ["$DOMAIN_HOME/autodeploy"]
+
+### EXPOSE $ADMIN_PORT $NM_PORT $MS_PORT $DEBUG_PORT
+EXPOSE $ADMIN_PORT $NM_PORT $MS_PORT
+CMD ["startWebLogic.sh"]

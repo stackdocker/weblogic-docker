@@ -11,7 +11,7 @@ download_dir+="/oraclelinux7/rpm"
 mkdir -p $download_dir
 
 if [ -e /bin/docker -o -e /usr/bin/docker -o -e /usr/local/bin/docker ]; then
-    if [[ $(docker version -f {{.Client.Version}}) =~ [1-9]\.[1-9]+\.[1-9]+ ]]; then
+    if [[ $(docker version -f {{.Client.Version}}) =~ [1-9]\.[1-9][0-9]?\.[0-9]+ ]]; then
 
 install_pkg="
     unzip \

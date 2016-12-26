@@ -6,40 +6,30 @@ working_dir=`pwd`
 
 download_dir=$(cd $(dirname "${BASH_SOURCE[0]}") && pwd)
 
-base_dir="$download_dir/centos7/yum"
+base_dir="$download_dir/opensuse13.2/zypp/packages"
 
-download_dir+="/centos7/rpm"
+download_dir+="/opensuse13.2/rpm"
 
-mkdir -p $download_dir
+mkdir -p $base_dir $download_dir
 
 if [ -e /bin/docker -o -e /usr/bin/docker -o -e /usr/local/bin/docker ]; then
     if [[ $(docker version -f {{.Client.Version}}) =~ [1-9]\.[1-9][0-9]?\.[0-9]+ ]]; then
 
 install_pkg="
+    glibc-locale \
+	glibc-i18ndata \
+	timezone \
+	net-tools \
+	curl \
     unzip \
-    glibc-common \
     bsdtar \
-	# tzdata \
 "
 
-# docker run -t --rm -v $download_dir:/tmp/download centos:centos7 \
-#     "yum --downloadonly --downloaddir=/tmp/download install $install_pkg"
+docker run -t --rm -v $base_dir/packages:/tmp/packages opensuse:13.2 \
+    zypper --non-interactive --pkg-cache-dir=/tmp/packages install --download-only $install_pkg
 
-docker run -t --rm -v $base_dir:/var/cache/yum centos:centos7 \
-    yum --downloadonly install $install_pkg
-
-# docker run -t --rm -v $base_dir:/tmp/download centos:centos7 \
-#     /bin/bash -c " \
-# 	    mkdir -p /var/cache/yum/x86_64 \
-#         && ln -s /tmp/download /var/cache/yum/x86_64/7 \
-#         && export install_pkg=' \
-#             unzip \
-#             glibc-common \
-#             bsdtar \
-#         ' \
-# 	    && yum --downloadonly install \$install_pkg \
-# 	  "
-
+# docker run -t --rm -v $base_dir:/var/cache/zypp opensuse:13.2 \
+#     zypper --non-interactive install --download-only install $install_pkg
 
     fi
 else

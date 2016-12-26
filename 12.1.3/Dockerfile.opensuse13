@@ -1,0 +1,49 @@
+FROM docker.io/opensuse:13.2
+# FROM docker.io/centos:centos7
+# FROM docker.io/oraclelinux:7.3
+MAINTAINER tangfeixiong <tangfx128@gmail.com>
+# Inspired by: Anastas Dancha <anapsix@random.io>, https://github.com/oracle/docker-images
+
+# Dependency
+COPY download/opensuse13.2/rpm/oss_update/x86_64/net-tools*.rpm /tmp/image_build/rpm/
+# Java extract location (<buil context>/download/jdk1.7.0_80/)
+# Oracle Fusion Middleware Weblogic 12.1.3 extract location (<build context>/download/wls12130/)
+COPY download/jdk1.7.0_80/ /opt/java/
+COPY download/wls12130/ /u01/oracle/
+
+ENV JAVA_HOME="/opt/java" \
+    ORACLE_HOME="/u01/oracle" \
+    MW_HOME="/u01/oracle" \
+    PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/java/bin:/u01/oracle/oracle_common/common/bin
+ENV USER_MEM_ARGS="-Djava.security.egd=file:/dev/./urandom"
+
+RUN set -x \
+    && temp_dir=/tmp/image_build \
+    && rpm -ivh $temp_dir/rpm/*.rpm \
+    && { \
+        [ ! -f /etc/shadow ] \
+        && pwconv ; \
+    } \
+# Install Oracle Server JRE package
+    && { \
+        [ -f $JAVA_HOME/bin/java ] \
+        && java -version \
+        || exit 1 ; \
+    } \
+# Install Oracle Weblogic package
+    && chmod a+xr /u01 \
+    && useradd -b /u01 -d $ORACLE_HOME --no-create-home --user-group -s /bin/bash oracle \
+    && echo oracle:oracle | chpasswd \
+    && cd $ORACLE_HOME \
+    && sh configure.sh -silent \
+    && find $ORACLE_HOME -name "*.sh" -exec chmod a+x {} \; \
+    && chown oracle:oracle -R /u01 \
+    && /bin/true
+
+WORKDIR $ORACLE_HOME
+
+ENV JAVA_OPTIONS="$JAVA_OPTIONS -Xms512m -Xmx512m -XX:PermSize=128m -XX:MaxPermSize=512m"
+
+VOLUME ["/tmp/project"]
+
+CMD ["/bin/bash"]
